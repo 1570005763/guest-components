@@ -64,6 +64,80 @@ jobs:
             ./rpmbuild/SOURCES/guest-components-*.tar.gz
             ./rpmbuild/SRPMS/*.src.rpm
             ./rpmbuild/RPMS/*/*.rpm
+    
+  guanfu-build:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
+      - uses: dtolnay/rust-toolchain@1.75.0
+
+      - name: Create buildspec from template for AnolisOS23
+        run: |
+          GITHUB_RELEASE="${GITHUB_REF#refs/tags/}"
+          VERSION=$(grep -m1 '^Version:' trustiflux.spec | awk '{print $2}')
+          RELEASE=$(grep -m1 '^%define release' trustiflux.spec | awk '{print $3}')
+          
+          echo "Using GITHUB_RELEASE: $GITHUB_RELEASE"
+          echo "Using VERSION: $VERSION"
+          echo "Using RELEASE: $RELEASE"
+
+          export GITHUB_RELEASE VERSION RELEASE
+          envsubst '$GITHUB_RELEASE $VERSION $RELEASE' \
+            < dist/buildspec/trustiflux.an23.buildspec.yaml.template \
+            > dist/buildspec/trustiflux.an23.buildspec.yaml
+
+      - name: Create build manifest
+        run: |
+          make create-tarball
+          mv /tmp/v*.tar.gz /tmp/rb-v*.tar.gz
+          mv /tmp/guest-components-*.tar.gz /tmp/rb-guest-components-*.tar.gz
+      
+      - name: Release build manifest
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          prerelease: ${{ env.PRE_RELEASE }}
+          files: |
+            /tmp/rb-v*.tar.gz
+            /tmp/rb-guest-components-v*-vendor.tar.gz
+            ./dist/buildspec/trustiflux.an23.buildspec.yaml
+
+      - name: Build AnolisOS23 RPM package
+        uses: 1570005763/GuanFu/.github/actions/guanfu-build@v1.0.0
+        with:
+          spec_path: dist/buildspec/trustiflux.an23.buildspec.yaml
+
+      - name: Place AnolisOS23 RPM packages
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/rpmbuild
+          # cp -r /tmp/rpmbuild/SRPMS/ $GITHUB_WORKSPACE/rpmbuild/
+          # cp -r /tmp/rpmbuild/RPMS/ $GITHUB_WORKSPACE/rpmbuild/
+          for file in /tmp/rpmbuild/SRPMS/*.src.rpm; do
+            [ -f "$file" ] && cp "$file" "$GITHUB_WORKSPACE/rpmbuild/SRPMS/rb-$(basename "$file")"
+          done
+          for file in /tmp/rpmbuild/RPMS/*/*.rpm; do
+            [ -f "$file" ] || continue
+            arch_dir=$(basename "$(dirname "$file")")  # 比如 x86_64、aarch64
+            mkdir -p "$GITHUB_WORKSPACE/rpmbuild/RPMS/$arch_dir"
+            cp "$file" "$GITHUB_WORKSPACE/rpmbuild/RPMS/$arch_dir/rb-$(basename "$file")"
+          done
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-packages
+          if-no-files-found: error
+          path: |
+            ./rpmbuild/SRPMS/*.src.rpm
+            ./rpmbuild/RPMS/*/*.rpm
 
   test:
     strategy:
@@ -102,13 +176,15 @@ jobs:
         with:
           path: ./
           merge-multiple: false
+
       - name: Install RPM packages
         run: |
           set -e
           set -x
 
           # test rpm package install
-          cat /etc/os-release | grep "Anolis OS 23" && yum install -y anolis-epao-release && yum install -y ./rpm-packages/RPMS/*/*an23*.rpm
+          # cat /etc/os-release | grep "Anolis OS 23" && yum install -y anolis-epao-release && yum install -y ./rpm-packages/RPMS/*/*an23*.rpm
+          cat /etc/os-release | grep "Anolis OS 23" && yum install -y $(find ./rpm-packages/RPMS -maxdepth 2 -name '*an23*.rpm' | grep -v '/rb[^/]*an23.*\.rpm$')
           cat /etc/os-release | grep "Alibaba Cloud Linux 3" && yum install -y ./rpm-packages/RPMS/*/*al8*.rpm
           attestation-agent --version
           confidential-data-hub --version
