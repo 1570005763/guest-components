@@ -5,11 +5,13 @@ container:
 
 inputs:
   source:
-    url: "https://github.com/inclavare-containers/guest-components/releases/download/${GITHUB_RELEASE}/reproducible-v${VERSION}.tar.gz"
-    targetDir: "/tmp/rpmbuild/SOURCES/"
+    # url: "https://github.com/inclavare-containers/guest-components/releases/download/${GITHUB_RELEASE}/reproducible-v${VERSION}.tar.gz"
+    url: "https://github.com/1570005763/guest-components/releases/download/${GITHUB_RELEASE}/reproducible-v${VERSION}.tar.gz"
+    targetPath: "/tmp/rpmbuild/SOURCES/reproducible-v${VERSION}.tar.gz"
   rustVendor:
-    url: "https://github.com/inclavare-containers/guest-components/releases/download/${GITHUB_RELEASE}/reproducible-guest-components-v${VERSION}-vendor.tar.gz"
-    targetDir: "/tmp/rpmbuild/SOURCES/"
+    # url: "https://github.com/inclavare-containers/guest-components/releases/download/${GITHUB_RELEASE}/reproducible-guest-components-v${VERSION}-vendor.tar.gz"
+    url: "https://github.com/1570005763/guest-components/releases/download/${GITHUB_RELEASE}/reproducible-guest-components-v${VERSION}-vendor.tar.gz"
+    targetPath: "/tmp/rpmbuild/SOURCES/reproducible-guest-components-v${VERSION}-vendor.tar.gz"
 
 environment:
   systemPackages:
